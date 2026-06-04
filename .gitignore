@@ -1,0 +1,5 @@
+/target
+/data
+*.profraw
+/lcov.info
+/bench-results
