@@ -1,0 +1,6 @@
+id,name,budget,location
+1,Engineering,1200000.0,Berlin
+2,Sales,450000.0,London
+3,Research,800000.0,Berlin
+4,Support,210000.0,
+5,Legal,,Paris
