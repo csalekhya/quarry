@@ -1,0 +1,26 @@
+-- SELECT l_shipmode,
+--        sum(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) AS high_line_count,
+--        sum(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END) AS low_line_count
+-- FROM orders, lineitem
+-- WHERE o_orderkey = l_orderkey AND l_shipmode IN ('MAIL', 'SHIP')
+--   AND l_commitdate < l_receiptdate AND l_shipdate < l_commitdate
+--   AND l_receiptdate >= DATE '1994-01-01'
+--   AND l_receiptdate < DATE '1994-01-01' + INTERVAL '1' YEAR
+-- GROUP BY l_shipmode
+-- ORDER BY l_shipmode
+== Optimized Logical Plan ==
+Sort: l_shipmode ASC  [est_rows=7]
+  Projection: l_shipmode, sum(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) AS high_line_count, sum(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END) AS low_line_count  [est_rows=7]
+    Aggregate: group=[l_shipmode] aggs=[sum(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) AS sum(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END), sum(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END) AS sum(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END)]  [est_rows=7]
+      Projection: o_orderpriority, l_shipmode  [est_rows=603]
+        InnerJoin: on=[o_orderkey = l_orderkey]  [est_rows=603]
+          Scan: orders [o_orderkey, o_orderpriority]  [est_rows=15000]
+          Scan: lineitem [l_orderkey, l_shipdate, l_commitdate, l_receiptdate, l_shipmode] filters=[l_shipmode IN ('MAIL', 'SHIP'), l_commitdate < l_receiptdate, l_shipdate < l_commitdate, l_receiptdate >= DATE '1994-01-01', l_receiptdate < DATE '1995-01-01']  [est_rows=603]
+== Physical Plan ==
+SortExec: [l_shipmode ASC]
+  ProjectExec: l_shipmode, sum(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) AS high_line_count, sum(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END) AS low_line_count
+    HashAggregateExec: group=[l_shipmode] aggs=[sum(CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END), sum(CASE WHEN o_orderpriority <> '1-URGENT' AND o_orderpriority <> '2-HIGH' THEN 1 ELSE 0 END)]
+      ProjectExec: o_orderpriority, l_shipmode
+        HashJoinExec: inner on=[o_orderkey = l_orderkey]
+          ScanExec: orders (memory) columns=[o_orderkey, o_orderpriority]
+          ScanExec: lineitem (memory) columns=[l_orderkey, l_shipdate, l_commitdate, l_receiptdate, l_shipmode] filter=[l_shipmode IN ('MAIL', 'SHIP') AND l_commitdate < l_receiptdate AND l_shipdate < l_commitdate AND l_receiptdate >= DATE '1994-01-01' AND l_receiptdate < DATE '1995-01-01'] pruning_predicates=2

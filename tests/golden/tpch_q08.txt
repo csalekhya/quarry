@@ -1,0 +1,68 @@
+-- SELECT o_year,
+--        sum(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0 END) / sum(volume) AS mkt_share
+-- FROM (SELECT EXTRACT(YEAR FROM o_orderdate) AS o_year,
+--              l_extendedprice * (1 - l_discount) AS volume,
+--              n2.n_name AS nation
+--       FROM part, supplier, lineitem, orders, customer, nation n1, nation n2, region
+--       WHERE p_partkey = l_partkey AND s_suppkey = l_suppkey AND l_orderkey = o_orderkey
+--         AND o_custkey = c_custkey AND c_nationkey = n1.n_nationkey
+--         AND n1.n_regionkey = r_regionkey AND r_name = 'AMERICA'
+--         AND s_nationkey = n2.n_nationkey
+--         AND o_orderdate BETWEEN DATE '1995-01-01' AND DATE '1996-12-31'
+--         AND p_type = 'ECONOMY ANODIZED STEEL') AS all_nations
+-- GROUP BY o_year
+-- ORDER BY o_year
+== Optimized Logical Plan ==
+Sort: o_year ASC  [est_rows=80]
+  Projection: o_year, sum(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0 END) / sum(volume) AS mkt_share  [est_rows=80]
+    Aggregate: group=[o_year] aggs=[sum(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0.0 END) AS sum(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0 END), sum(volume) AS sum(volume)]  [est_rows=80]
+      Projection: extract_year(o_orderdate) AS o_year, l_extendedprice * (1.0 - l_discount) AS volume, n2.n_name AS nation  [est_rows=80]
+        Projection: o_orderdate, l_extendedprice, l_discount, n2.n_name  [est_rows=80]
+          InnerJoin: on=[s_nationkey = n2.n_nationkey]  [est_rows=80]
+            Projection: s_nationkey, o_orderdate, l_extendedprice, l_discount  [est_rows=80]
+              InnerJoin: on=[s_suppkey = l_suppkey]  [est_rows=80]
+                Scan: supplier [s_suppkey, s_nationkey]  [est_rows=100]
+                Projection: o_orderdate, l_suppkey, l_extendedprice, l_discount  [est_rows=80]
+                  InnerJoin: on=[c_nationkey = n1.n_nationkey]  [est_rows=80]
+                    Projection: c_nationkey, o_orderdate, l_suppkey, l_extendedprice, l_discount  [est_rows=399]
+                      InnerJoin: on=[c_custkey = o_custkey]  [est_rows=399]
+                        Scan: customer [c_custkey, c_nationkey]  [est_rows=1500]
+                        Projection: o_custkey, o_orderdate, l_suppkey, l_extendedprice, l_discount  [est_rows=399]
+                          InnerJoin: on=[o_orderkey = l_orderkey]  [est_rows=399]
+                            Scan: orders [o_orderkey, o_custkey, o_orderdate] filters=[o_orderdate >= DATE '1995-01-01', o_orderdate <= DATE '1996-12-31']  [est_rows=6243]
+                            Projection: l_orderkey, l_suppkey, l_extendedprice, l_discount  [est_rows=399]
+                              InnerJoin: on=[l_partkey = p_partkey]  [est_rows=399]
+                                Scan: lineitem [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]  [est_rows=59883]
+                                Scan: part [p_partkey, p_type] filters=[p_type = 'ECONOMY ANODIZED STEEL']  [est_rows=13]
+                    Projection: n1.n_nationkey  [est_rows=5]
+                      InnerJoin: on=[n1.n_regionkey = r_regionkey]  [est_rows=5]
+                        Scan: nation AS n1 [n_nationkey, n_regionkey]  [est_rows=25]
+                        Scan: region [r_regionkey, r_name] filters=[r_name = 'AMERICA']  [est_rows=1]
+            Scan: nation AS n2 [n_nationkey, n_name]  [est_rows=25]
+== Physical Plan ==
+SortExec: [o_year ASC]
+  ProjectExec: o_year, sum(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0 END) / sum(volume) AS mkt_share
+    HashAggregateExec: group=[o_year] aggs=[sum(CASE WHEN nation = 'BRAZIL' THEN volume ELSE 0.0 END), sum(volume)]
+      ProjectExec: extract_year(o_orderdate) AS o_year, l_extendedprice * (1.0 - l_discount) AS volume, n2.n_name AS nation
+        ProjectExec: o_orderdate, l_extendedprice, l_discount, n2.n_name AS n_name
+          HashJoinExec: inner on=[s_nationkey = n2.n_nationkey]
+            ProjectExec: s_nationkey, o_orderdate, l_extendedprice, l_discount
+              HashJoinExec: inner on=[s_suppkey = l_suppkey]
+                ScanExec: supplier (memory) columns=[s_suppkey, s_nationkey]
+                ProjectExec: o_orderdate, l_suppkey, l_extendedprice, l_discount
+                  HashJoinExec: inner on=[c_nationkey = n1.n_nationkey]
+                    ProjectExec: c_nationkey, o_orderdate, l_suppkey, l_extendedprice, l_discount
+                      HashJoinExec: inner on=[c_custkey = o_custkey]
+                        ScanExec: customer (memory) columns=[c_custkey, c_nationkey]
+                        ProjectExec: o_custkey, o_orderdate, l_suppkey, l_extendedprice, l_discount
+                          HashJoinExec: inner on=[o_orderkey = l_orderkey]
+                            ScanExec: orders (memory) columns=[o_orderkey, o_custkey, o_orderdate] filter=[o_orderdate >= DATE '1995-01-01' AND o_orderdate <= DATE '1996-12-31'] pruning_predicates=2
+                            ProjectExec: l_orderkey, l_suppkey, l_extendedprice, l_discount
+                              HashJoinExec: inner on=[l_partkey = p_partkey]
+                                ScanExec: lineitem (memory) columns=[l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
+                                ScanExec: part (memory) columns=[p_partkey, p_type] filter=[p_type = 'ECONOMY ANODIZED STEEL'] pruning_predicates=1
+                    ProjectExec: n1.n_nationkey AS n_nationkey
+                      HashJoinExec: inner on=[n1.n_regionkey = r_regionkey]
+                        ScanExec: nation (memory) columns=[n_nationkey, n_regionkey]
+                        ScanExec: region (memory) columns=[r_regionkey, r_name] filter=[r_name = 'AMERICA'] pruning_predicates=1
+            ScanExec: nation (memory) columns=[n_nationkey, n_name]

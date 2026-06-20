@@ -1,0 +1,51 @@
+-- SELECT nation, o_year, sum(amount) AS sum_profit
+-- FROM (SELECT n_name AS nation, EXTRACT(YEAR FROM o_orderdate) AS o_year,
+--              l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity AS amount
+--       FROM part, supplier, lineitem, partsupp, orders, nation
+--       WHERE s_suppkey = l_suppkey AND ps_suppkey = l_suppkey AND ps_partkey = l_partkey
+--         AND p_partkey = l_partkey AND o_orderkey = l_orderkey AND s_nationkey = n_nationkey
+--         AND p_name LIKE '%green%') AS profit
+-- GROUP BY nation, o_year
+-- ORDER BY nation, o_year DESC
+== Optimized Logical Plan ==
+Sort: nation ASC, o_year DESC  [est_rows=240]
+  Projection: nation, o_year, sum(amount) AS sum_profit  [est_rows=240]
+    Aggregate: group=[nation, o_year] aggs=[sum(amount) AS sum(amount)]  [est_rows=240]
+      Projection: n_name AS nation, extract_year(o_orderdate) AS o_year, l_extendedprice * (1.0 - l_discount) - ps_supplycost * l_quantity AS amount  [est_rows=240]
+        Projection: o_orderdate, l_quantity, l_extendedprice, l_discount, ps_supplycost, n_name  [est_rows=240]
+          InnerJoin: on=[o_orderkey = l_orderkey]  [est_rows=240]
+            Scan: orders [o_orderkey, o_orderdate]  [est_rows=15000]
+            Projection: l_orderkey, l_quantity, l_extendedprice, l_discount, ps_supplycost, n_name  [est_rows=240]
+              InnerJoin: on=[l_suppkey = s_suppkey]  [est_rows=240]
+                Projection: l_orderkey, l_suppkey, l_quantity, l_extendedprice, l_discount, ps_supplycost  [est_rows=240]
+                  InnerJoin: on=[l_partkey = p_partkey]  [est_rows=240]
+                    Projection: l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount, ps_supplycost  [est_rows=2395]
+                      InnerJoin: on=[l_suppkey = ps_suppkey, l_partkey = ps_partkey]  [est_rows=2395]
+                        Scan: lineitem [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]  [est_rows=59883]
+                        Scan: partsupp [ps_partkey, ps_suppkey, ps_supplycost]  [est_rows=8000]
+                    Scan: part [p_partkey, p_name] filters=[p_name LIKE '%green%']  [est_rows=200]
+                Projection: s_suppkey, n_name  [est_rows=100]
+                  InnerJoin: on=[s_nationkey = n_nationkey]  [est_rows=100]
+                    Scan: supplier [s_suppkey, s_nationkey]  [est_rows=100]
+                    Scan: nation [n_nationkey, n_name]  [est_rows=25]
+== Physical Plan ==
+SortExec: [nation ASC, o_year DESC]
+  ProjectExec: nation, o_year, sum(amount) AS sum_profit
+    HashAggregateExec: group=[nation, o_year] aggs=[sum(amount)]
+      ProjectExec: n_name AS nation, extract_year(o_orderdate) AS o_year, l_extendedprice * (1.0 - l_discount) - ps_supplycost * l_quantity AS amount
+        ProjectExec: o_orderdate, l_quantity, l_extendedprice, l_discount, ps_supplycost, n_name
+          HashJoinExec: inner on=[o_orderkey = l_orderkey]
+            ScanExec: orders (memory) columns=[o_orderkey, o_orderdate]
+            ProjectExec: l_orderkey, l_quantity, l_extendedprice, l_discount, ps_supplycost, n_name
+              HashJoinExec: inner on=[l_suppkey = s_suppkey]
+                ProjectExec: l_orderkey, l_suppkey, l_quantity, l_extendedprice, l_discount, ps_supplycost
+                  HashJoinExec: inner on=[l_partkey = p_partkey]
+                    ProjectExec: l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount, ps_supplycost
+                      HashJoinExec: inner on=[l_suppkey = ps_suppkey, l_partkey = ps_partkey]
+                        ScanExec: lineitem (memory) columns=[l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
+                        ScanExec: partsupp (memory) columns=[ps_partkey, ps_suppkey, ps_supplycost]
+                    ScanExec: part (memory) columns=[p_partkey, p_name] filter=[p_name LIKE '%green%']
+                ProjectExec: s_suppkey, n_name
+                  HashJoinExec: inner on=[s_nationkey = n_nationkey]
+                    ScanExec: supplier (memory) columns=[s_suppkey, s_nationkey]
+                    ScanExec: nation (memory) columns=[n_nationkey, n_name]

@@ -1,0 +1,14 @@
+-- SELECT sum(l_extendedprice * l_discount) AS revenue
+-- FROM lineitem
+-- WHERE l_shipdate >= DATE '1994-01-01'
+--   AND l_shipdate < DATE '1994-01-01' + INTERVAL '1' YEAR
+--   AND l_discount BETWEEN 0.06 - 0.01 AND 0.06 + 0.01
+--   AND l_quantity < 24
+== Optimized Logical Plan ==
+Projection: sum(l_extendedprice * l_discount) AS revenue  [est_rows=1]
+  Aggregate: group=[] aggs=[sum(l_extendedprice * l_discount) AS sum(l_extendedprice * l_discount)]  [est_rows=1]
+    Scan: lineitem [l_quantity, l_extendedprice, l_discount, l_shipdate] filters=[l_shipdate >= DATE '1994-01-01', l_shipdate < DATE '1995-01-01', l_discount >= 0.049999999999999996, l_discount <= 0.06999999999999999, l_quantity < 24.0]  [est_rows=3144]
+== Physical Plan ==
+ProjectExec: sum(l_extendedprice * l_discount) AS revenue
+  HashAggregateExec: group=[] aggs=[sum(l_extendedprice * l_discount)]
+    ScanExec: lineitem (memory) columns=[l_quantity, l_extendedprice, l_discount, l_shipdate] filter=[l_shipdate >= DATE '1994-01-01' AND l_shipdate < DATE '1995-01-01' AND l_discount >= 0.049999999999999996 AND l_discount <= 0.06999999999999999 AND l_quantity < 24.0] pruning_predicates=5

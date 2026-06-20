@@ -1,0 +1,54 @@
+-- SELECT ps_partkey, value
+-- FROM (SELECT ps_partkey, sum(ps_supplycost * ps_availqty) AS value
+--       FROM partsupp, supplier, nation
+--       WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey AND n_name = 'GERMANY'
+--       GROUP BY ps_partkey) AS v,
+--      (SELECT sum(ps_supplycost * ps_availqty) * 0.001 AS threshold
+--       FROM partsupp, supplier, nation
+--       WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey AND n_name = 'GERMANY') AS t
+-- WHERE value > threshold
+-- ORDER BY value DESC, ps_partkey
+== Optimized Logical Plan ==
+Sort: value DESC, ps_partkey ASC  [est_rows=107]
+  Projection: ps_partkey, value  [est_rows=107]
+    InnerJoin: filter=value > threshold  [est_rows=107]
+      Projection: ps_partkey, sum(ps_supplycost * ps_availqty) AS value  [est_rows=320]
+        Aggregate: group=[partsupp.ps_partkey] aggs=[sum(partsupp.ps_supplycost * CAST(partsupp.ps_availqty AS DOUBLE)) AS sum(ps_supplycost * ps_availqty)]  [est_rows=320]
+          Projection: partsupp.ps_partkey, partsupp.ps_availqty, partsupp.ps_supplycost  [est_rows=320]
+            InnerJoin: on=[partsupp.ps_suppkey = supplier.s_suppkey]  [est_rows=320]
+              Scan: partsupp [ps_partkey, ps_suppkey, ps_availqty, ps_supplycost]  [est_rows=8000]
+              Projection: supplier.s_suppkey  [est_rows=4]
+                InnerJoin: on=[supplier.s_nationkey = nation.n_nationkey]  [est_rows=4]
+                  Scan: supplier [s_suppkey, s_nationkey]  [est_rows=100]
+                  Scan: nation [n_nationkey, n_name] filters=[nation.n_name = 'GERMANY']  [est_rows=1]
+      Projection: sum(ps_supplycost * ps_availqty) * 0.001 AS threshold  [est_rows=1]
+        Aggregate: group=[] aggs=[sum(partsupp.ps_supplycost * CAST(partsupp.ps_availqty AS DOUBLE)) AS sum(ps_supplycost * ps_availqty)]  [est_rows=1]
+          Projection: partsupp.ps_availqty, partsupp.ps_supplycost  [est_rows=320]
+            InnerJoin: on=[partsupp.ps_suppkey = supplier.s_suppkey]  [est_rows=320]
+              Scan: partsupp [ps_suppkey, ps_availqty, ps_supplycost]  [est_rows=8000]
+              Projection: supplier.s_suppkey  [est_rows=4]
+                InnerJoin: on=[supplier.s_nationkey = nation.n_nationkey]  [est_rows=4]
+                  Scan: supplier [s_suppkey, s_nationkey]  [est_rows=100]
+                  Scan: nation [n_nationkey, n_name] filters=[nation.n_name = 'GERMANY']  [est_rows=1]
+== Physical Plan ==
+SortExec: [value DESC, ps_partkey ASC]
+  ProjectExec: ps_partkey, value
+    NestedLoopJoinExec: inner filter=value > threshold
+      ProjectExec: ps_partkey, sum(ps_supplycost * ps_availqty) AS value
+        HashAggregateExec: group=[partsupp.ps_partkey] aggs=[sum(partsupp.ps_supplycost * CAST(partsupp.ps_availqty AS DOUBLE))]
+          ProjectExec: partsupp.ps_partkey AS ps_partkey, partsupp.ps_availqty AS ps_availqty, partsupp.ps_supplycost AS ps_supplycost
+            HashJoinExec: inner on=[partsupp.ps_suppkey = supplier.s_suppkey]
+              ScanExec: partsupp (memory) columns=[ps_partkey, ps_suppkey, ps_availqty, ps_supplycost]
+              ProjectExec: supplier.s_suppkey AS s_suppkey
+                HashJoinExec: inner on=[supplier.s_nationkey = nation.n_nationkey]
+                  ScanExec: supplier (memory) columns=[s_suppkey, s_nationkey]
+                  ScanExec: nation (memory) columns=[n_nationkey, n_name] filter=[nation.n_name = 'GERMANY'] pruning_predicates=1
+      ProjectExec: sum(ps_supplycost * ps_availqty) * 0.001 AS threshold
+        HashAggregateExec: group=[] aggs=[sum(partsupp.ps_supplycost * CAST(partsupp.ps_availqty AS DOUBLE))]
+          ProjectExec: partsupp.ps_availqty AS ps_availqty, partsupp.ps_supplycost AS ps_supplycost
+            HashJoinExec: inner on=[partsupp.ps_suppkey = supplier.s_suppkey]
+              ScanExec: partsupp (memory) columns=[ps_suppkey, ps_availqty, ps_supplycost]
+              ProjectExec: supplier.s_suppkey AS s_suppkey
+                HashJoinExec: inner on=[supplier.s_nationkey = nation.n_nationkey]
+                  ScanExec: supplier (memory) columns=[s_suppkey, s_nationkey]
+                  ScanExec: nation (memory) columns=[n_nationkey, n_name] filter=[nation.n_name = 'GERMANY'] pruning_predicates=1

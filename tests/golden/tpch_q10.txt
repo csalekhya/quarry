@@ -1,0 +1,40 @@
+-- SELECT c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) AS revenue,
+--        c_acctbal, n_name, c_address, c_phone, c_comment
+-- FROM customer, orders, lineitem, nation
+-- WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey
+--   AND o_orderdate >= DATE '1993-10-01'
+--   AND o_orderdate < DATE '1993-10-01' + INTERVAL '3' MONTH
+--   AND l_returnflag = 'R' AND c_nationkey = n_nationkey
+-- GROUP BY c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment
+-- ORDER BY revenue DESC, c_custkey
+-- LIMIT 20
+== Optimized Logical Plan ==
+Limit: skip=0 fetch=20  [est_rows=20]
+  TopK: fetch=20 keys=[revenue DESC, c_custkey ASC]  [est_rows=20]
+    Projection: c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) AS revenue, c_acctbal, n_name, c_address, c_phone, c_comment  [est_rows=4638]
+      Aggregate: group=[c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment] aggs=[sum(l_extendedprice * (1.0 - l_discount)) AS sum(l_extendedprice * (1 - l_discount))]  [est_rows=4638]
+        Projection: l_extendedprice, l_discount, c_custkey, c_name, c_address, c_phone, c_acctbal, c_comment, n_name  [est_rows=4638]
+          InnerJoin: on=[l_orderkey = o_orderkey]  [est_rows=4638]
+            Scan: lineitem [l_orderkey, l_extendedprice, l_discount, l_returnflag] filters=[l_returnflag = 'R']  [est_rows=19961]
+            Projection: o_orderkey, c_custkey, c_name, c_address, c_phone, c_acctbal, c_comment, n_name  [est_rows=3486]
+              InnerJoin: on=[o_custkey = c_custkey]  [est_rows=3486]
+                Scan: orders [o_orderkey, o_custkey, o_orderdate] filters=[o_orderdate >= DATE '1993-10-01', o_orderdate < DATE '1994-01-01']  [est_rows=3486]
+                Projection: c_custkey, c_name, c_address, c_phone, c_acctbal, c_comment, n_name  [est_rows=1500]
+                  InnerJoin: on=[c_nationkey = n_nationkey]  [est_rows=1500]
+                    Scan: customer [c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_comment]  [est_rows=1500]
+                    Scan: nation [n_nationkey, n_name]  [est_rows=25]
+== Physical Plan ==
+LimitExec: skip=0 fetch=20
+  SortExec: TopK(fetch=20) [revenue DESC, c_custkey ASC]
+    ProjectExec: c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) AS revenue, c_acctbal, n_name, c_address, c_phone, c_comment
+      HashAggregateExec: group=[c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment] aggs=[sum(l_extendedprice * (1.0 - l_discount))]
+        ProjectExec: l_extendedprice, l_discount, c_custkey, c_name, c_address, c_phone, c_acctbal, c_comment, n_name
+          HashJoinExec: inner on=[l_orderkey = o_orderkey]
+            ScanExec: lineitem (memory) columns=[l_orderkey, l_extendedprice, l_discount, l_returnflag] filter=[l_returnflag = 'R'] pruning_predicates=1
+            ProjectExec: o_orderkey, c_custkey, c_name, c_address, c_phone, c_acctbal, c_comment, n_name
+              HashJoinExec: inner on=[o_custkey = c_custkey]
+                ScanExec: orders (memory) columns=[o_orderkey, o_custkey, o_orderdate] filter=[o_orderdate >= DATE '1993-10-01' AND o_orderdate < DATE '1994-01-01'] pruning_predicates=2
+                ProjectExec: c_custkey, c_name, c_address, c_phone, c_acctbal, c_comment, n_name
+                  HashJoinExec: inner on=[c_nationkey = n_nationkey]
+                    ScanExec: customer (memory) columns=[c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_comment]
+                    ScanExec: nation (memory) columns=[n_nationkey, n_name]

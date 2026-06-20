@@ -1,0 +1,52 @@
+-- SELECT supp_nation, cust_nation, l_year, sum(volume) AS revenue
+-- FROM (SELECT n1.n_name AS supp_nation, n2.n_name AS cust_nation,
+--              EXTRACT(YEAR FROM l_shipdate) AS l_year,
+--              l_extendedprice * (1 - l_discount) AS volume
+--       FROM supplier, lineitem, orders, customer, nation n1, nation n2
+--       WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey AND c_custkey = o_custkey
+--         AND s_nationkey = n1.n_nationkey AND c_nationkey = n2.n_nationkey
+--         AND ((n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY')
+--           OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE'))
+--         AND l_shipdate BETWEEN DATE '1995-01-01' AND DATE '1996-12-31') AS shipping
+-- GROUP BY supp_nation, cust_nation, l_year
+-- ORDER BY supp_nation, cust_nation, l_year
+== Optimized Logical Plan ==
+Sort: supp_nation ASC, cust_nation ASC, l_year ASC  [est_rows=119]
+  Projection: supp_nation, cust_nation, l_year, sum(volume) AS revenue  [est_rows=119]
+    Aggregate: group=[supp_nation, cust_nation, l_year] aggs=[sum(volume) AS sum(volume)]  [est_rows=119]
+      Projection: n1.n_name AS supp_nation, n2.n_name AS cust_nation, extract_year(l_shipdate) AS l_year, l_extendedprice * (1.0 - l_discount) AS volume  [est_rows=119]
+        Projection: l_extendedprice, l_discount, l_shipdate, n1.n_name, n2.n_name  [est_rows=119]
+          InnerJoin: on=[n1.n_nationkey = s_nationkey, l_suppkey = s_suppkey]  [est_rows=119]
+            Projection: l_suppkey, l_extendedprice, l_discount, l_shipdate, n1.n_nationkey, n1.n_name, n2.n_name  [est_rows=2975]
+              InnerJoin: on=[l_orderkey = o_orderkey]  [est_rows=2975]
+                Scan: lineitem [l_orderkey, l_suppkey, l_extendedprice, l_discount, l_shipdate] filters=[l_shipdate >= DATE '1995-01-01', l_shipdate <= DATE '1996-12-31']  [est_rows=24812]
+                Projection: o_orderkey, n1.n_nationkey, n1.n_name, n2.n_name  [est_rows=1799]
+                  InnerJoin: on=[o_custkey = c_custkey]  [est_rows=1799]
+                    Scan: orders [o_orderkey, o_custkey]  [est_rows=15000]
+                    Projection: c_custkey, n1.n_nationkey, n1.n_name, n2.n_name  [est_rows=120]
+                      InnerJoin: on=[c_nationkey = n2.n_nationkey]  [est_rows=120]
+                        Scan: customer [c_custkey, c_nationkey]  [est_rows=1500]
+                        InnerJoin: filter=n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY' OR n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE'  [est_rows=2]
+                          Scan: nation AS n1 [n_nationkey, n_name]  [est_rows=25]
+                          Scan: nation AS n2 [n_nationkey, n_name]  [est_rows=25]
+            Scan: supplier [s_suppkey, s_nationkey]  [est_rows=100]
+== Physical Plan ==
+SortExec: [supp_nation ASC, cust_nation ASC, l_year ASC]
+  ProjectExec: supp_nation, cust_nation, l_year, sum(volume) AS revenue
+    HashAggregateExec: group=[supp_nation, cust_nation, l_year] aggs=[sum(volume)]
+      ProjectExec: n1.n_name AS supp_nation, n2.n_name AS cust_nation, extract_year(l_shipdate) AS l_year, l_extendedprice * (1.0 - l_discount) AS volume
+        ProjectExec: l_extendedprice, l_discount, l_shipdate, n1.n_name AS n_name, n2.n_name AS n_name
+          HashJoinExec: inner on=[n1.n_nationkey = s_nationkey, l_suppkey = s_suppkey]
+            ProjectExec: l_suppkey, l_extendedprice, l_discount, l_shipdate, n1.n_nationkey AS n_nationkey, n1.n_name AS n_name, n2.n_name AS n_name
+              HashJoinExec: inner on=[l_orderkey = o_orderkey]
+                ScanExec: lineitem (memory) columns=[l_orderkey, l_suppkey, l_extendedprice, l_discount, l_shipdate] filter=[l_shipdate >= DATE '1995-01-01' AND l_shipdate <= DATE '1996-12-31'] pruning_predicates=2
+                ProjectExec: o_orderkey, n1.n_nationkey AS n_nationkey, n1.n_name AS n_name, n2.n_name AS n_name
+                  HashJoinExec: inner on=[o_custkey = c_custkey]
+                    ScanExec: orders (memory) columns=[o_orderkey, o_custkey]
+                    ProjectExec: c_custkey, n1.n_nationkey AS n_nationkey, n1.n_name AS n_name, n2.n_name AS n_name
+                      HashJoinExec: inner on=[c_nationkey = n2.n_nationkey]
+                        ScanExec: customer (memory) columns=[c_custkey, c_nationkey]
+                        NestedLoopJoinExec: inner filter=n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY' OR n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE'
+                          ScanExec: nation (memory) columns=[n_nationkey, n_name]
+                          ScanExec: nation (memory) columns=[n_nationkey, n_name]
+            ScanExec: supplier (memory) columns=[s_suppkey, s_nationkey]
