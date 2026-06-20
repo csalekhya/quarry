@@ -1,0 +1,9 @@
+-- SELECT o_orderkey, o_totalprice FROM orders ORDER BY o_totalprice DESC LIMIT 5 OFFSET 2
+== Optimized Logical Plan ==
+Limit: skip=2 fetch=5  [est_rows=5]
+  TopK: fetch=7 keys=[o_totalprice DESC]  [est_rows=7]
+    Scan: orders [o_orderkey, o_totalprice]  [est_rows=15000]
+== Physical Plan ==
+LimitExec: skip=2 fetch=5
+  SortExec: TopK(fetch=7) [o_totalprice DESC]
+    ScanExec: orders (memory) columns=[o_orderkey, o_totalprice]

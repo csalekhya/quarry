@@ -1,0 +1,11 @@
+-- SELECT c_name, o_orderkey FROM customer LEFT JOIN orders ON c_custkey = o_custkey WHERE o_totalprice > 1000
+== Optimized Logical Plan ==
+Projection: c_name, o_orderkey  [est_rows=14996]
+  InnerJoin: on=[o_custkey = c_custkey]  [est_rows=14996]
+    Scan: orders [o_orderkey, o_custkey, o_totalprice] filters=[o_totalprice > 1000.0]  [est_rows=14996]
+    Scan: customer [c_custkey, c_name]  [est_rows=1500]
+== Physical Plan ==
+ProjectExec: c_name, o_orderkey
+  HashJoinExec: inner on=[o_custkey = c_custkey]
+    ScanExec: orders (memory) columns=[o_orderkey, o_custkey, o_totalprice] filter=[o_totalprice > 1000.0] pruning_predicates=1
+    ScanExec: customer (memory) columns=[c_custkey, c_name]

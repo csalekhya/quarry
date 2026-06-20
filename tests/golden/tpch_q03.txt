@@ -1,0 +1,31 @@
+-- SELECT l_orderkey, sum(l_extendedprice * (1 - l_discount)) AS revenue, o_orderdate, o_shippriority
+-- FROM customer, orders, lineitem
+-- WHERE c_mktsegment = 'BUILDING' AND c_custkey = o_custkey AND l_orderkey = o_orderkey
+--   AND o_orderdate < DATE '1995-03-15' AND l_shipdate > DATE '1995-03-15'
+-- GROUP BY l_orderkey, o_orderdate, o_shippriority
+-- ORDER BY revenue DESC, o_orderdate, l_orderkey
+-- LIMIT 10
+== Optimized Logical Plan ==
+Limit: skip=0 fetch=10  [est_rows=10]
+  TopK: fetch=10 keys=[revenue DESC, o_orderdate ASC, l_orderkey ASC]  [est_rows=10]
+    Projection: l_orderkey, sum(l_extendedprice * (1 - l_discount)) AS revenue, o_orderdate, o_shippriority  [est_rows=4731]
+      Aggregate: group=[l_orderkey, o_orderdate, o_shippriority] aggs=[sum(l_extendedprice * (1.0 - l_discount)) AS sum(l_extendedprice * (1 - l_discount))]  [est_rows=4731]
+        Projection: l_orderkey, l_extendedprice, l_discount, o_orderdate, o_shippriority  [est_rows=4731]
+          InnerJoin: on=[l_orderkey = o_orderkey]  [est_rows=4731]
+            Scan: lineitem [l_orderkey, l_extendedprice, l_discount, l_shipdate] filters=[l_shipdate > DATE '1995-03-15']  [est_rows=30409]
+            Projection: o_orderkey, o_orderdate, o_shippriority  [est_rows=2334]
+              InnerJoin: on=[o_custkey = c_custkey]  [est_rows=2334]
+                Scan: orders [o_orderkey, o_custkey, o_orderdate, o_shippriority] filters=[o_orderdate < DATE '1995-03-15']  [est_rows=7780]
+                Scan: customer [c_custkey, c_mktsegment] filters=[c_mktsegment = 'BUILDING']  [est_rows=300]
+== Physical Plan ==
+LimitExec: skip=0 fetch=10
+  SortExec: TopK(fetch=10) [revenue DESC, o_orderdate ASC, l_orderkey ASC]
+    ProjectExec: l_orderkey, sum(l_extendedprice * (1 - l_discount)) AS revenue, o_orderdate, o_shippriority
+      HashAggregateExec: group=[l_orderkey, o_orderdate, o_shippriority] aggs=[sum(l_extendedprice * (1.0 - l_discount))]
+        ProjectExec: l_orderkey, l_extendedprice, l_discount, o_orderdate, o_shippriority
+          HashJoinExec: inner on=[l_orderkey = o_orderkey]
+            ScanExec: lineitem (memory) columns=[l_orderkey, l_extendedprice, l_discount, l_shipdate] filter=[l_shipdate > DATE '1995-03-15'] pruning_predicates=1
+            ProjectExec: o_orderkey, o_orderdate, o_shippriority
+              HashJoinExec: inner on=[o_custkey = c_custkey]
+                ScanExec: orders (memory) columns=[o_orderkey, o_custkey, o_orderdate, o_shippriority] filter=[o_orderdate < DATE '1995-03-15'] pruning_predicates=1
+                ScanExec: customer (memory) columns=[c_custkey, c_mktsegment] filter=[c_mktsegment = 'BUILDING'] pruning_predicates=1

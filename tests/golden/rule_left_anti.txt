@@ -1,0 +1,15 @@
+-- SELECT c_name FROM customer LEFT JOIN orders ON c_custkey = o_custkey WHERE o_orderkey IS NULL
+== Optimized Logical Plan ==
+Projection: c_name  [est_rows=500]
+  Filter: o_orderkey IS NULL  [est_rows=500]
+    Projection: c_name, o_orderkey  [est_rows=15500]
+      LeftJoin: on=[c_custkey = o_custkey]  [est_rows=15500]
+        Scan: customer [c_custkey, c_name]  [est_rows=1500]
+        Scan: orders [o_orderkey, o_custkey]  [est_rows=15000]
+== Physical Plan ==
+ProjectExec: c_name
+  FilterExec: o_orderkey IS NULL
+    ProjectExec: c_name, o_orderkey
+      HashJoinExec: left on=[c_custkey = o_custkey]
+        ScanExec: customer (memory) columns=[c_custkey, c_name]
+        ScanExec: orders (memory) columns=[o_orderkey, o_custkey]

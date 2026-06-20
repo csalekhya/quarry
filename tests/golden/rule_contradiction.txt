@@ -1,0 +1,7 @@
+-- SELECT count(*) FROM orders WHERE 1 = 0
+== Optimized Logical Plan ==
+Aggregate: group=[] aggs=[count(*) AS count(*)]  [est_rows=1]
+  Empty: rows=0  [est_rows=0]
+== Physical Plan ==
+HashAggregateExec: group=[] aggs=[count(*)]
+  EmptyExec: rows=0

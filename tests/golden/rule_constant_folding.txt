@@ -1,0 +1,7 @@
+-- SELECT o_orderkey FROM orders WHERE o_orderdate < DATE '1994-01-01' + INTERVAL '1' YEAR AND 1 = 1 AND o_totalprice > 10 * 100
+== Optimized Logical Plan ==
+Projection: o_orderkey  [est_rows=7292]
+  Scan: orders [o_orderkey, o_totalprice, o_orderdate] filters=[o_orderdate < DATE '1995-01-01', o_totalprice > 1000.0]  [est_rows=7292]
+== Physical Plan ==
+ProjectExec: o_orderkey
+  ScanExec: orders (memory) columns=[o_orderkey, o_totalprice, o_orderdate] filter=[o_orderdate < DATE '1995-01-01' AND o_totalprice > 1000.0] pruning_predicates=2

@@ -1,0 +1,23 @@
+-- SELECT l_returnflag, l_linestatus,
+--        sum(l_quantity) AS sum_qty,
+--        sum(l_extendedprice) AS sum_base_price,
+--        sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+--        sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+--        avg(l_quantity) AS avg_qty,
+--        avg(l_extendedprice) AS avg_price,
+--        avg(l_discount) AS avg_disc,
+--        count(*) AS count_order
+-- FROM lineitem
+-- WHERE l_shipdate <= DATE '1998-12-01' - INTERVAL '90' DAY
+-- GROUP BY l_returnflag, l_linestatus
+-- ORDER BY l_returnflag, l_linestatus
+== Optimized Logical Plan ==
+Sort: l_returnflag ASC, l_linestatus ASC  [est_rows=6]
+  Projection: l_returnflag, l_linestatus, sum(l_quantity) AS sum_qty, sum(l_extendedprice) AS sum_base_price, sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, avg(l_quantity) AS avg_qty, avg(l_extendedprice) AS avg_price, avg(l_discount) AS avg_disc, count(*) AS count_order  [est_rows=6]
+    Aggregate: group=[l_returnflag, l_linestatus] aggs=[sum(l_quantity) AS sum(l_quantity), sum(l_extendedprice) AS sum(l_extendedprice), sum(l_extendedprice * (1.0 - l_discount)) AS sum(l_extendedprice * (1 - l_discount)), sum(l_extendedprice * (1.0 - l_discount) * (1.0 + l_tax)) AS sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)), avg(l_quantity) AS avg(l_quantity), avg(l_extendedprice) AS avg(l_extendedprice), avg(l_discount) AS avg(l_discount), count(*) AS count(*)]  [est_rows=6]
+      Scan: lineitem [l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate] filters=[l_shipdate <= DATE '1998-09-02']  [est_rows=59883]
+== Physical Plan ==
+SortExec: [l_returnflag ASC, l_linestatus ASC]
+  ProjectExec: l_returnflag, l_linestatus, sum(l_quantity) AS sum_qty, sum(l_extendedprice) AS sum_base_price, sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, avg(l_quantity) AS avg_qty, avg(l_extendedprice) AS avg_price, avg(l_discount) AS avg_disc, count(*) AS count_order
+    HashAggregateExec: group=[l_returnflag, l_linestatus] aggs=[sum(l_quantity), sum(l_extendedprice), sum(l_extendedprice * (1.0 - l_discount)), sum(l_extendedprice * (1.0 - l_discount) * (1.0 + l_tax)), avg(l_quantity), avg(l_extendedprice), avg(l_discount), count(*)]
+      ScanExec: lineitem (memory) columns=[l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate] filter=[l_shipdate <= DATE '1998-09-02'] pruning_predicates=1

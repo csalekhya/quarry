@@ -1,0 +1,11 @@
+-- SELECT * FROM (SELECT o_custkey, count(*) AS n FROM orders GROUP BY o_custkey) AS c WHERE o_custkey < 100 AND n > 3
+== Optimized Logical Plan ==
+Projection: o_custkey, count(*) AS n  [est_rows=330]
+  Filter: count(*) > 3  [est_rows=330]
+    Aggregate: group=[o_custkey] aggs=[count(*) AS count(*)]  [est_rows=991]
+      Scan: orders [o_custkey] filters=[o_custkey < 100]  [est_rows=991]
+== Physical Plan ==
+ProjectExec: o_custkey, count(*) AS n
+  FilterExec: count(*) > 3
+    HashAggregateExec: group=[o_custkey] aggs=[count(*)]
+      ScanExec: orders (memory) columns=[o_custkey] filter=[o_custkey < 100] pruning_predicates=1

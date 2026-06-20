@@ -1,0 +1,73 @@
+-- SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment
+-- FROM part, supplier, partsupp, nation, region,
+--      (SELECT ps_partkey AS mc_partkey, min(ps_supplycost) AS min_cost
+--       FROM partsupp, supplier, nation, region
+--       WHERE s_suppkey = ps_suppkey AND s_nationkey = n_nationkey
+--         AND n_regionkey = r_regionkey AND r_name = 'EUROPE'
+--       GROUP BY ps_partkey) AS mc
+-- WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey
+--   AND p_size = 15 AND p_type LIKE '%BRASS'
+--   AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE'
+--   AND mc_partkey = p_partkey AND ps_supplycost = min_cost
+-- ORDER BY s_acctbal DESC, n_name, s_name, p_partkey
+-- LIMIT 100
+== Optimized Logical Plan ==
+Limit: skip=0 fetch=100  [est_rows=0]
+  TopK: fetch=100 keys=[s_acctbal DESC, n_name ASC, s_name ASC, p_partkey ASC]  [est_rows=0]
+    Projection: supplier.s_acctbal AS s_acctbal, supplier.s_name AS s_name, nation.n_name AS n_name, p_partkey, p_mfgr, supplier.s_address AS s_address, supplier.s_phone AS s_phone, supplier.s_comment AS s_comment  [est_rows=0]
+      InnerJoin: on=[nation.n_regionkey = region.r_regionkey]  [est_rows=0]
+        Projection: nation.n_name, nation.n_regionkey, supplier.s_name, supplier.s_address, supplier.s_phone, supplier.s_acctbal, supplier.s_comment, p_partkey, p_mfgr  [est_rows=0]
+          InnerJoin: on=[nation.n_nationkey = supplier.s_nationkey]  [est_rows=0]
+            Scan: nation [n_nationkey, n_name, n_regionkey]  [est_rows=25]
+            Projection: supplier.s_name, supplier.s_address, supplier.s_nationkey, supplier.s_phone, supplier.s_acctbal, supplier.s_comment, p_partkey, p_mfgr  [est_rows=0]
+              InnerJoin: on=[supplier.s_suppkey = partsupp.ps_suppkey]  [est_rows=0]
+                Scan: supplier [s_suppkey, s_name, s_address, s_nationkey, s_phone, s_acctbal, s_comment]  [est_rows=100]
+                Projection: partsupp.ps_suppkey, p_partkey, p_mfgr  [est_rows=0]
+                  InnerJoin: on=[partsupp.ps_supplycost = min_cost, partsupp.ps_partkey = p_partkey]  [est_rows=0]
+                    Scan: partsupp [ps_partkey, ps_suppkey, ps_supplycost]  [est_rows=8000]
+                    Projection: min_cost, p_partkey, p_mfgr  [est_rows=4]
+                      InnerJoin: on=[mc_partkey = p_partkey]  [est_rows=4]
+                        Projection: ps_partkey AS mc_partkey, min(ps_supplycost) AS min_cost  [est_rows=1600]
+                          Aggregate: group=[partsupp.ps_partkey] aggs=[min(partsupp.ps_supplycost) AS min(ps_supplycost)]  [est_rows=1600]
+                            Projection: partsupp.ps_partkey, partsupp.ps_supplycost  [est_rows=1600]
+                              InnerJoin: on=[partsupp.ps_suppkey = supplier.s_suppkey]  [est_rows=1600]
+                                Scan: partsupp [ps_partkey, ps_suppkey, ps_supplycost]  [est_rows=8000]
+                                Projection: supplier.s_suppkey  [est_rows=20]
+                                  InnerJoin: on=[supplier.s_nationkey = nation.n_nationkey]  [est_rows=20]
+                                    Scan: supplier [s_suppkey, s_nationkey]  [est_rows=100]
+                                    Projection: nation.n_nationkey  [est_rows=5]
+                                      InnerJoin: on=[nation.n_regionkey = region.r_regionkey]  [est_rows=5]
+                                        Scan: nation [n_nationkey, n_regionkey]  [est_rows=25]
+                                        Scan: region [r_regionkey, r_name] filters=[region.r_name = 'EUROPE']  [est_rows=1]
+                        Scan: part [p_partkey, p_mfgr, p_type, p_size] filters=[p_size = 15, p_type LIKE '%BRASS']  [est_rows=4]
+        Scan: region [r_regionkey, r_name] filters=[region.r_name = 'EUROPE']  [est_rows=1]
+== Physical Plan ==
+LimitExec: skip=0 fetch=100
+  SortExec: TopK(fetch=100) [s_acctbal DESC, n_name ASC, s_name ASC, p_partkey ASC]
+    ProjectExec: supplier.s_acctbal AS s_acctbal, supplier.s_name AS s_name, nation.n_name AS n_name, p_partkey, p_mfgr, supplier.s_address AS s_address, supplier.s_phone AS s_phone, supplier.s_comment AS s_comment
+      HashJoinExec: inner on=[nation.n_regionkey = region.r_regionkey]
+        ProjectExec: nation.n_name AS n_name, nation.n_regionkey AS n_regionkey, supplier.s_name AS s_name, supplier.s_address AS s_address, supplier.s_phone AS s_phone, supplier.s_acctbal AS s_acctbal, supplier.s_comment AS s_comment, p_partkey, p_mfgr
+          HashJoinExec: inner on=[nation.n_nationkey = supplier.s_nationkey]
+            ScanExec: nation (memory) columns=[n_nationkey, n_name, n_regionkey]
+            ProjectExec: supplier.s_name AS s_name, supplier.s_address AS s_address, supplier.s_nationkey AS s_nationkey, supplier.s_phone AS s_phone, supplier.s_acctbal AS s_acctbal, supplier.s_comment AS s_comment, p_partkey, p_mfgr
+              HashJoinExec: inner on=[supplier.s_suppkey = partsupp.ps_suppkey]
+                ScanExec: supplier (memory) columns=[s_suppkey, s_name, s_address, s_nationkey, s_phone, s_acctbal, s_comment]
+                ProjectExec: partsupp.ps_suppkey AS ps_suppkey, p_partkey, p_mfgr
+                  HashJoinExec: inner on=[partsupp.ps_supplycost = min_cost, partsupp.ps_partkey = p_partkey]
+                    ScanExec: partsupp (memory) columns=[ps_partkey, ps_suppkey, ps_supplycost]
+                    ProjectExec: min_cost, p_partkey, p_mfgr
+                      HashJoinExec: inner on=[mc_partkey = p_partkey]
+                        ProjectExec: ps_partkey AS mc_partkey, min(ps_supplycost) AS min_cost
+                          HashAggregateExec: group=[partsupp.ps_partkey] aggs=[min(partsupp.ps_supplycost)]
+                            ProjectExec: partsupp.ps_partkey AS ps_partkey, partsupp.ps_supplycost AS ps_supplycost
+                              HashJoinExec: inner on=[partsupp.ps_suppkey = supplier.s_suppkey]
+                                ScanExec: partsupp (memory) columns=[ps_partkey, ps_suppkey, ps_supplycost]
+                                ProjectExec: supplier.s_suppkey AS s_suppkey
+                                  HashJoinExec: inner on=[supplier.s_nationkey = nation.n_nationkey]
+                                    ScanExec: supplier (memory) columns=[s_suppkey, s_nationkey]
+                                    ProjectExec: nation.n_nationkey AS n_nationkey
+                                      HashJoinExec: inner on=[nation.n_regionkey = region.r_regionkey]
+                                        ScanExec: nation (memory) columns=[n_nationkey, n_regionkey]
+                                        ScanExec: region (memory) columns=[r_regionkey, r_name] filter=[region.r_name = 'EUROPE'] pruning_predicates=1
+                        ScanExec: part (memory) columns=[p_partkey, p_mfgr, p_type, p_size] filter=[p_size = 15 AND p_type LIKE '%BRASS'] pruning_predicates=1
+        ScanExec: region (memory) columns=[r_regionkey, r_name] filter=[region.r_name = 'EUROPE'] pruning_predicates=1

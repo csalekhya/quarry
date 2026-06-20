@@ -1,0 +1,28 @@
+-- SELECT o_orderpriority, count(*) AS order_count
+-- FROM orders,
+--      (SELECT DISTINCT l_orderkey FROM lineitem WHERE l_commitdate < l_receiptdate) AS late
+-- WHERE o_orderkey = late.l_orderkey
+--   AND o_orderdate >= DATE '1993-07-01'
+--   AND o_orderdate < DATE '1993-07-01' + INTERVAL '3' MONTH
+-- GROUP BY o_orderpriority
+-- ORDER BY o_orderpriority
+== Optimized Logical Plan ==
+Sort: o_orderpriority ASC  [est_rows=5]
+  Projection: o_orderpriority, count(*) AS order_count  [est_rows=5]
+    Aggregate: group=[o_orderpriority] aggs=[count(*) AS count(*)]  [est_rows=5]
+      Projection: o_orderpriority  [est_rows=3220]
+        InnerJoin: on=[late.l_orderkey = o_orderkey]  [est_rows=3220]
+          Aggregate: group=[l_orderkey] aggs=[]  [est_rows=15000]
+            Projection: lineitem.l_orderkey AS l_orderkey  [est_rows=19961]
+              Scan: lineitem [l_orderkey, l_commitdate, l_receiptdate] filters=[l_commitdate < l_receiptdate]  [est_rows=19961]
+          Scan: orders [o_orderkey, o_orderdate, o_orderpriority] filters=[o_orderdate >= DATE '1993-07-01', o_orderdate < DATE '1993-10-01']  [est_rows=3220]
+== Physical Plan ==
+SortExec: [o_orderpriority ASC]
+  ProjectExec: o_orderpriority, count(*) AS order_count
+    HashAggregateExec: group=[o_orderpriority] aggs=[count(*)]
+      ProjectExec: o_orderpriority
+        HashJoinExec: inner on=[late.l_orderkey = o_orderkey]
+          HashAggregateExec: group=[l_orderkey] aggs=[]
+            ProjectExec: lineitem.l_orderkey AS l_orderkey
+              ScanExec: lineitem (memory) columns=[l_orderkey, l_commitdate, l_receiptdate] filter=[l_commitdate < l_receiptdate]
+          ScanExec: orders (memory) columns=[o_orderkey, o_orderdate, o_orderpriority] filter=[o_orderdate >= DATE '1993-07-01' AND o_orderdate < DATE '1993-10-01'] pruning_predicates=2
