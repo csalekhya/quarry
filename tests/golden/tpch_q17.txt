@@ -1,0 +1,31 @@
+-- SELECT sum(l_extendedprice) / 7.0 AS avg_yearly
+-- FROM lineitem, part,
+--      (SELECT l_partkey AS agg_partkey, 0.2 * avg(l_quantity) AS avg_quantity
+--       FROM lineitem GROUP BY l_partkey) AS part_agg
+-- WHERE p_partkey = l_partkey AND agg_partkey = l_partkey
+--   AND p_brand = 'Brand#23' AND p_container = 'MED BOX'
+--   AND l_quantity < avg_quantity
+== Optimized Logical Plan ==
+Projection: sum(l_extendedprice) / 7.0 AS avg_yearly  [est_rows=1]
+  Aggregate: group=[] aggs=[sum(lineitem.l_extendedprice) AS sum(l_extendedprice)]  [est_rows=1]
+    Projection: lineitem.l_extendedprice  [est_rows=20]
+      InnerJoin: on=[agg_partkey = lineitem.l_partkey] filter=lineitem.l_quantity < avg_quantity  [est_rows=20]
+        Projection: l_partkey AS agg_partkey, 0.2 * avg(l_quantity) AS avg_quantity  [est_rows=2000]
+          Aggregate: group=[lineitem.l_partkey] aggs=[avg(lineitem.l_quantity) AS avg(l_quantity)]  [est_rows=2000]
+            Scan: lineitem [l_partkey, l_quantity]  [est_rows=59883]
+        Projection: lineitem.l_partkey, lineitem.l_quantity, lineitem.l_extendedprice  [est_rows=60]
+          InnerJoin: on=[lineitem.l_partkey = p_partkey]  [est_rows=60]
+            Scan: lineitem [l_partkey, l_quantity, l_extendedprice]  [est_rows=59883]
+            Scan: part [p_partkey, p_brand, p_container] filters=[p_brand = 'Brand#23', p_container = 'MED BOX']  [est_rows=2]
+== Physical Plan ==
+ProjectExec: sum(l_extendedprice) / 7.0 AS avg_yearly
+  HashAggregateExec: group=[] aggs=[sum(lineitem.l_extendedprice)]
+    ProjectExec: lineitem.l_extendedprice AS l_extendedprice
+      HashJoinExec: inner on=[agg_partkey = lineitem.l_partkey] filter=lineitem.l_quantity < avg_quantity
+        ProjectExec: l_partkey AS agg_partkey, 0.2 * avg(l_quantity) AS avg_quantity
+          HashAggregateExec: group=[lineitem.l_partkey] aggs=[avg(lineitem.l_quantity)]
+            ScanExec: lineitem (memory) columns=[l_partkey, l_quantity]
+        ProjectExec: lineitem.l_partkey AS l_partkey, lineitem.l_quantity AS l_quantity, lineitem.l_extendedprice AS l_extendedprice
+          HashJoinExec: inner on=[lineitem.l_partkey = p_partkey]
+            ScanExec: lineitem (memory) columns=[l_partkey, l_quantity, l_extendedprice]
+            ScanExec: part (memory) columns=[p_partkey, p_brand, p_container] filter=[p_brand = 'Brand#23' AND p_container = 'MED BOX'] pruning_predicates=2

@@ -1,0 +1,68 @@
+-- SELECT s_name, count(*) AS numwait
+-- FROM supplier, lineitem l1, orders, nation,
+--      (SELECT l_orderkey AS m_orderkey, count(DISTINCT l_suppkey) AS nsupp
+--       FROM lineitem GROUP BY l_orderkey) AS multi,
+--      (SELECT l_orderkey AS late_orderkey, count(DISTINCT l_suppkey) AS nlate
+--       FROM lineitem WHERE l_receiptdate > l_commitdate GROUP BY l_orderkey) AS late
+-- WHERE s_suppkey = l1.l_suppkey AND o_orderkey = l1.l_orderkey AND o_orderstatus = 'F'
+--   AND l1.l_receiptdate > l1.l_commitdate
+--   AND m_orderkey = l1.l_orderkey AND nsupp > 1
+--   AND late_orderkey = l1.l_orderkey AND nlate = 1
+--   AND s_nationkey = n_nationkey AND n_name = 'SAUDI ARABIA'
+-- GROUP BY s_name
+-- ORDER BY numwait DESC, s_name
+-- LIMIT 100
+== Optimized Logical Plan ==
+Limit: skip=0 fetch=100  [est_rows=1]
+  TopK: fetch=100 keys=[numwait DESC, s_name ASC]  [est_rows=1]
+    Projection: s_name, count(*) AS numwait  [est_rows=1]
+      Aggregate: group=[s_name] aggs=[count(*) AS count(*)]  [est_rows=1]
+        Projection: s_name  [est_rows=1]
+          InnerJoin: on=[o_orderkey = l1.l_orderkey]  [est_rows=1]
+            Scan: orders [o_orderkey, o_orderstatus] filters=[o_orderstatus = 'F']  [est_rows=5000]
+            Projection: s_name, l1.l_orderkey  [est_rows=1]
+              InnerJoin: on=[s_nationkey = n_nationkey]  [est_rows=1]
+                Projection: s_name, s_nationkey, l1.l_orderkey  [est_rows=1]
+                  InnerJoin: on=[s_suppkey = l1.l_suppkey]  [est_rows=1]
+                    Scan: supplier [s_suppkey, s_name, s_nationkey]  [est_rows=100]
+                    Projection: l1.l_orderkey, l1.l_suppkey  [est_rows=1]
+                      InnerJoin: on=[m_orderkey = l1.l_orderkey]  [est_rows=1]
+                        Projection: l_orderkey AS m_orderkey  [est_rows=5000]
+                          Filter: count(DISTINCT l_suppkey) > 1  [est_rows=5000]
+                            Aggregate: group=[lineitem.l_orderkey] aggs=[count(DISTINCT lineitem.l_suppkey) AS count(DISTINCT l_suppkey)]  [est_rows=15000]
+                              Scan: lineitem [l_orderkey, l_suppkey]  [est_rows=59883]
+                        Projection: l1.l_orderkey, l1.l_suppkey  [est_rows=1]
+                          InnerJoin: on=[l1.l_orderkey = late_orderkey]  [est_rows=1]
+                            Scan: lineitem AS l1 [l_orderkey, l_suppkey, l_commitdate, l_receiptdate] filters=[l1.l_receiptdate > l1.l_commitdate]  [est_rows=19961]
+                            Projection: l_orderkey AS late_orderkey  [est_rows=1]
+                              Filter: count(DISTINCT l_suppkey) = 1  [est_rows=1]
+                                Aggregate: group=[lineitem.l_orderkey] aggs=[count(DISTINCT lineitem.l_suppkey) AS count(DISTINCT l_suppkey)]  [est_rows=15000]
+                                  Scan: lineitem [l_orderkey, l_suppkey, l_commitdate, l_receiptdate] filters=[lineitem.l_receiptdate > lineitem.l_commitdate]  [est_rows=19961]
+                Scan: nation [n_nationkey, n_name] filters=[n_name = 'SAUDI ARABIA']  [est_rows=1]
+== Physical Plan ==
+LimitExec: skip=0 fetch=100
+  SortExec: TopK(fetch=100) [numwait DESC, s_name ASC]
+    ProjectExec: s_name, count(*) AS numwait
+      HashAggregateExec: group=[s_name] aggs=[count(*)]
+        ProjectExec: s_name
+          HashJoinExec: inner on=[o_orderkey = l1.l_orderkey]
+            ScanExec: orders (memory) columns=[o_orderkey, o_orderstatus] filter=[o_orderstatus = 'F'] pruning_predicates=1
+            ProjectExec: s_name, l1.l_orderkey AS l_orderkey
+              HashJoinExec: inner on=[s_nationkey = n_nationkey]
+                ProjectExec: s_name, s_nationkey, l1.l_orderkey AS l_orderkey
+                  HashJoinExec: inner on=[s_suppkey = l1.l_suppkey]
+                    ScanExec: supplier (memory) columns=[s_suppkey, s_name, s_nationkey]
+                    ProjectExec: l1.l_orderkey AS l_orderkey, l1.l_suppkey AS l_suppkey
+                      HashJoinExec: inner on=[m_orderkey = l1.l_orderkey]
+                        ProjectExec: l_orderkey AS m_orderkey
+                          FilterExec: count(DISTINCT l_suppkey) > 1
+                            HashAggregateExec: group=[lineitem.l_orderkey] aggs=[count(DISTINCT lineitem.l_suppkey)]
+                              ScanExec: lineitem (memory) columns=[l_orderkey, l_suppkey]
+                        ProjectExec: l1.l_orderkey AS l_orderkey, l1.l_suppkey AS l_suppkey
+                          HashJoinExec: inner on=[l1.l_orderkey = late_orderkey]
+                            ScanExec: lineitem (memory) columns=[l_orderkey, l_suppkey, l_commitdate, l_receiptdate] filter=[l1.l_receiptdate > l1.l_commitdate]
+                            ProjectExec: l_orderkey AS late_orderkey
+                              FilterExec: count(DISTINCT l_suppkey) = 1
+                                HashAggregateExec: group=[lineitem.l_orderkey] aggs=[count(DISTINCT lineitem.l_suppkey)]
+                                  ScanExec: lineitem (memory) columns=[l_orderkey, l_suppkey, l_commitdate, l_receiptdate] filter=[lineitem.l_receiptdate > lineitem.l_commitdate]
+                ScanExec: nation (memory) columns=[n_nationkey, n_name] filter=[n_name = 'SAUDI ARABIA'] pruning_predicates=1

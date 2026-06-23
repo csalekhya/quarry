@@ -1,0 +1,35 @@
+-- SELECT p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt
+-- FROM partsupp
+-- JOIN part ON p_partkey = ps_partkey
+-- LEFT JOIN (SELECT s_suppkey AS bad_suppkey FROM supplier
+--            WHERE s_comment LIKE '%Customer%Complaints%') AS bad
+--   ON ps_suppkey = bad_suppkey
+-- WHERE p_brand <> 'Brand#45' AND p_type NOT LIKE 'MEDIUM POLISHED%'
+--   AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
+--   AND bad_suppkey IS NULL
+-- GROUP BY p_brand, p_type, p_size
+-- ORDER BY supplier_cnt DESC, p_brand, p_type, p_size
+== Optimized Logical Plan ==
+Sort: supplier_cnt DESC, p_brand ASC, p_type ASC, p_size ASC  [est_rows=995]
+  Projection: p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt  [est_rows=995]
+    Aggregate: group=[p_brand, p_type, p_size] aggs=[count(DISTINCT ps_suppkey) AS count(DISTINCT ps_suppkey)]  [est_rows=995]
+      Filter: bad_suppkey IS NULL  [est_rows=995]
+        LeftJoin: on=[ps_suppkey = bad_suppkey]  [est_rows=1106]
+          Projection: ps_suppkey, p_brand, p_type, p_size  [est_rows=1106]
+            InnerJoin: on=[ps_partkey = p_partkey]  [est_rows=1106]
+              Scan: partsupp [ps_partkey, ps_suppkey]  [est_rows=8000]
+              Scan: part [p_partkey, p_brand, p_type, p_size] filters=[p_brand <> 'Brand#45', p_type NOT LIKE 'MEDIUM POLISHED%', p_size IN (49, 14, 23, 45, 19, 3, 36, 9)]  [est_rows=276]
+          Projection: s_suppkey AS bad_suppkey  [est_rows=10]
+            Scan: supplier [s_suppkey, s_comment] filters=[s_comment LIKE '%Customer%Complaints%']  [est_rows=10]
+== Physical Plan ==
+SortExec: [supplier_cnt DESC, p_brand ASC, p_type ASC, p_size ASC]
+  ProjectExec: p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt
+    HashAggregateExec: group=[p_brand, p_type, p_size] aggs=[count(DISTINCT ps_suppkey)]
+      FilterExec: bad_suppkey IS NULL
+        HashJoinExec: left on=[ps_suppkey = bad_suppkey]
+          ProjectExec: ps_suppkey, p_brand, p_type, p_size
+            HashJoinExec: inner on=[ps_partkey = p_partkey]
+              ScanExec: partsupp (memory) columns=[ps_partkey, ps_suppkey]
+              ScanExec: part (memory) columns=[p_partkey, p_brand, p_type, p_size] filter=[p_brand <> 'Brand#45' AND p_type NOT LIKE 'MEDIUM POLISHED%' AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)] pruning_predicates=1
+          ProjectExec: s_suppkey AS bad_suppkey
+            ScanExec: supplier (memory) columns=[s_suppkey, s_comment] filter=[s_comment LIKE '%Customer%Complaints%']

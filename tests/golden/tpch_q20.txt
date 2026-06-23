@@ -1,0 +1,52 @@
+-- SELECT s_name, s_address
+-- FROM supplier, nation,
+--      (SELECT DISTINCT ps_suppkey AS avail_suppkey
+--       FROM partsupp,
+--            (SELECT p_partkey AS forest_partkey FROM part WHERE p_name LIKE 'forest%') AS fp,
+--            (SELECT l_partkey AS agg_partkey, l_suppkey AS agg_suppkey, 0.5 * sum(l_quantity) AS half_qty
+--             FROM lineitem
+--             WHERE l_shipdate >= DATE '1994-01-01'
+--               AND l_shipdate < DATE '1994-01-01' + INTERVAL '1' YEAR
+--             GROUP BY l_partkey, l_suppkey) AS agg
+--       WHERE ps_partkey = forest_partkey AND agg_partkey = ps_partkey
+--         AND agg_suppkey = ps_suppkey AND ps_availqty > half_qty) AS avail
+-- WHERE s_suppkey = avail_suppkey AND s_nationkey = n_nationkey AND n_name = 'CANADA'
+-- ORDER BY s_name
+== Optimized Logical Plan ==
+Sort: s_name ASC  [est_rows=4]
+  Projection: s_name, s_address  [est_rows=4]
+    InnerJoin: on=[avail.avail_suppkey = s_suppkey]  [est_rows=4]
+      Aggregate: group=[avail_suppkey] aggs=[]  [est_rows=100]
+        Projection: ps_suppkey AS avail_suppkey  [est_rows=200]
+          InnerJoin: on=[ps_partkey = forest_partkey]  [est_rows=200]
+            Projection: ps_partkey, ps_suppkey  [est_rows=255]
+              InnerJoin: on=[agg_partkey = ps_partkey, agg_suppkey = ps_suppkey] filter=CAST(ps_availqty AS DOUBLE) > half_qty  [est_rows=255]
+                Projection: l_partkey AS agg_partkey, l_suppkey AS agg_suppkey, 0.5 * sum(l_quantity) AS half_qty  [est_rows=19135]
+                  Aggregate: group=[l_partkey, l_suppkey] aggs=[sum(l_quantity) AS sum(l_quantity)]  [est_rows=19135]
+                    Scan: lineitem [l_partkey, l_suppkey, l_quantity, l_shipdate] filters=[l_shipdate >= DATE '1994-01-01', l_shipdate < DATE '1995-01-01']  [est_rows=19135]
+                Scan: partsupp [ps_partkey, ps_suppkey, ps_availqty]  [est_rows=8000]
+            Projection: p_partkey AS forest_partkey  [est_rows=200]
+              Scan: part [p_partkey, p_name] filters=[p_name LIKE 'forest%']  [est_rows=200]
+      Projection: s_suppkey, s_name, s_address  [est_rows=4]
+        InnerJoin: on=[s_nationkey = n_nationkey]  [est_rows=4]
+          Scan: supplier [s_suppkey, s_name, s_address, s_nationkey]  [est_rows=100]
+          Scan: nation [n_nationkey, n_name] filters=[n_name = 'CANADA']  [est_rows=1]
+== Physical Plan ==
+SortExec: [s_name ASC]
+  ProjectExec: s_name, s_address
+    HashJoinExec: inner on=[avail.avail_suppkey = s_suppkey]
+      HashAggregateExec: group=[avail_suppkey] aggs=[]
+        ProjectExec: ps_suppkey AS avail_suppkey
+          HashJoinExec: inner on=[ps_partkey = forest_partkey]
+            ProjectExec: ps_partkey, ps_suppkey
+              HashJoinExec: inner on=[agg_partkey = ps_partkey, agg_suppkey = ps_suppkey] filter=CAST(ps_availqty AS DOUBLE) > half_qty
+                ProjectExec: l_partkey AS agg_partkey, l_suppkey AS agg_suppkey, 0.5 * sum(l_quantity) AS half_qty
+                  HashAggregateExec: group=[l_partkey, l_suppkey] aggs=[sum(l_quantity)]
+                    ScanExec: lineitem (memory) columns=[l_partkey, l_suppkey, l_quantity, l_shipdate] filter=[l_shipdate >= DATE '1994-01-01' AND l_shipdate < DATE '1995-01-01'] pruning_predicates=2
+                ScanExec: partsupp (memory) columns=[ps_partkey, ps_suppkey, ps_availqty]
+            ProjectExec: p_partkey AS forest_partkey
+              ScanExec: part (memory) columns=[p_partkey, p_name] filter=[p_name LIKE 'forest%']
+      ProjectExec: s_suppkey, s_name, s_address
+        HashJoinExec: inner on=[s_nationkey = n_nationkey]
+          ScanExec: supplier (memory) columns=[s_suppkey, s_name, s_address, s_nationkey]
+          ScanExec: nation (memory) columns=[n_nationkey, n_name] filter=[n_name = 'CANADA'] pruning_predicates=1

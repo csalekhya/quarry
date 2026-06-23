@@ -1,0 +1,40 @@
+-- SELECT cntrycode, count(*) AS numcust, sum(c_acctbal) AS totacctbal
+-- FROM (SELECT substring(c_phone FROM 1 FOR 2) AS cntrycode, c_acctbal
+--       FROM customer LEFT JOIN orders ON o_custkey = c_custkey,
+--            (SELECT avg(c_acctbal) AS avg_bal FROM customer
+--             WHERE c_acctbal > 0.00
+--               AND substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17')) AS a
+--       WHERE substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17')
+--         AND c_acctbal > avg_bal AND o_orderkey IS NULL) AS custsale
+-- GROUP BY cntrycode
+-- ORDER BY cntrycode
+== Optimized Logical Plan ==
+Sort: cntrycode ASC  [est_rows=1]
+  Projection: cntrycode, count(*) AS numcust, sum(c_acctbal) AS totacctbal  [est_rows=1]
+    Aggregate: group=[cntrycode] aggs=[count(*) AS count(*), sum(custsale.c_acctbal) AS sum(c_acctbal)]  [est_rows=1]
+      Projection: substr(customer.c_phone, 1, 2) AS cntrycode, customer.c_acctbal AS c_acctbal  [est_rows=0]
+        Projection: customer.c_phone, customer.c_acctbal  [est_rows=0]
+          InnerJoin: filter=customer.c_acctbal > avg_bal  [est_rows=0]
+            Filter: o_orderkey IS NULL  [est_rows=0]
+              Projection: customer.c_phone, customer.c_acctbal, o_orderkey  [est_rows=105]
+                LeftJoin: on=[customer.c_custkey = o_custkey]  [est_rows=105]
+                  Scan: customer [c_custkey, c_phone, c_acctbal] filters=[substr(customer.c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')]  [est_rows=7]
+                  Scan: orders [o_orderkey, o_custkey]  [est_rows=15000]
+            Projection: avg(c_acctbal) AS avg_bal  [est_rows=1]
+              Aggregate: group=[] aggs=[avg(customer.c_acctbal) AS avg(c_acctbal)]  [est_rows=1]
+                Scan: customer [c_phone, c_acctbal] filters=[customer.c_acctbal > 0.0, substr(customer.c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')]  [est_rows=6]
+== Physical Plan ==
+SortExec: [cntrycode ASC]
+  ProjectExec: cntrycode, count(*) AS numcust, sum(c_acctbal) AS totacctbal
+    HashAggregateExec: group=[cntrycode] aggs=[count(*), sum(custsale.c_acctbal)]
+      ProjectExec: substr(customer.c_phone, 1, 2) AS cntrycode, customer.c_acctbal AS c_acctbal
+        ProjectExec: customer.c_phone AS c_phone, customer.c_acctbal AS c_acctbal
+          NestedLoopJoinExec: inner filter=customer.c_acctbal > avg_bal
+            FilterExec: o_orderkey IS NULL
+              ProjectExec: customer.c_phone AS c_phone, customer.c_acctbal AS c_acctbal, o_orderkey
+                HashJoinExec: left on=[customer.c_custkey = o_custkey]
+                  ScanExec: customer (memory) columns=[c_custkey, c_phone, c_acctbal] filter=[substr(customer.c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')]
+                  ScanExec: orders (memory) columns=[o_orderkey, o_custkey]
+            ProjectExec: avg(c_acctbal) AS avg_bal
+              HashAggregateExec: group=[] aggs=[avg(customer.c_acctbal)]
+                ScanExec: customer (memory) columns=[c_phone, c_acctbal] filter=[customer.c_acctbal > 0.0 AND substr(customer.c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')] pruning_predicates=1

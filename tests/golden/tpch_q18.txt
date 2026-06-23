@@ -1,0 +1,44 @@
+-- SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) AS total_qty
+-- FROM customer, orders, lineitem,
+--      (SELECT l_orderkey AS big_orderkey FROM lineitem
+--       GROUP BY l_orderkey HAVING sum(l_quantity) > 250) AS big
+-- WHERE o_orderkey = big_orderkey AND c_custkey = o_custkey AND o_orderkey = l_orderkey
+-- GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice
+-- ORDER BY o_totalprice DESC, o_orderdate, o_orderkey
+-- LIMIT 100
+== Optimized Logical Plan ==
+Limit: skip=0 fetch=100  [est_rows=100]
+  TopK: fetch=100 keys=[o_totalprice DESC, o_orderdate ASC, o_orderkey ASC]  [est_rows=100]
+    Projection: c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) AS total_qty  [est_rows=19961]
+      Aggregate: group=[c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice] aggs=[sum(lineitem.l_quantity) AS sum(l_quantity)]  [est_rows=19961]
+        Projection: lineitem.l_quantity, o_orderkey, o_totalprice, o_orderdate, c_custkey, c_name  [est_rows=19961]
+          InnerJoin: on=[lineitem.l_orderkey = o_orderkey]  [est_rows=19961]
+            Scan: lineitem [l_orderkey, l_quantity]  [est_rows=59883]
+            Projection: o_orderkey, o_totalprice, o_orderdate, c_custkey, c_name  [est_rows=5000]
+              InnerJoin: on=[o_custkey = c_custkey]  [est_rows=5000]
+                Projection: o_orderkey, o_custkey, o_totalprice, o_orderdate  [est_rows=5000]
+                  InnerJoin: on=[o_orderkey = big_orderkey]  [est_rows=5000]
+                    Scan: orders [o_orderkey, o_custkey, o_totalprice, o_orderdate]  [est_rows=15000]
+                    Projection: l_orderkey AS big_orderkey  [est_rows=5000]
+                      Filter: sum(l_quantity) > 250.0  [est_rows=5000]
+                        Aggregate: group=[lineitem.l_orderkey] aggs=[sum(lineitem.l_quantity) AS sum(l_quantity)]  [est_rows=15000]
+                          Scan: lineitem [l_orderkey, l_quantity]  [est_rows=59883]
+                Scan: customer [c_custkey, c_name]  [est_rows=1500]
+== Physical Plan ==
+LimitExec: skip=0 fetch=100
+  SortExec: TopK(fetch=100) [o_totalprice DESC, o_orderdate ASC, o_orderkey ASC]
+    ProjectExec: c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) AS total_qty
+      HashAggregateExec: group=[c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice] aggs=[sum(lineitem.l_quantity)]
+        ProjectExec: lineitem.l_quantity AS l_quantity, o_orderkey, o_totalprice, o_orderdate, c_custkey, c_name
+          HashJoinExec: inner on=[lineitem.l_orderkey = o_orderkey]
+            ScanExec: lineitem (memory) columns=[l_orderkey, l_quantity]
+            ProjectExec: o_orderkey, o_totalprice, o_orderdate, c_custkey, c_name
+              HashJoinExec: inner on=[o_custkey = c_custkey]
+                ProjectExec: o_orderkey, o_custkey, o_totalprice, o_orderdate
+                  HashJoinExec: inner on=[o_orderkey = big_orderkey]
+                    ScanExec: orders (memory) columns=[o_orderkey, o_custkey, o_totalprice, o_orderdate]
+                    ProjectExec: l_orderkey AS big_orderkey
+                      FilterExec: sum(l_quantity) > 250.0
+                        HashAggregateExec: group=[lineitem.l_orderkey] aggs=[sum(lineitem.l_quantity)]
+                          ScanExec: lineitem (memory) columns=[l_orderkey, l_quantity]
+                ScanExec: customer (memory) columns=[c_custkey, c_name]

@@ -1,0 +1,27 @@
+-- SELECT c_count, count(*) AS custdist
+-- FROM (SELECT c_custkey, count(o_orderkey) AS c_count
+--       FROM customer LEFT OUTER JOIN orders
+--         ON c_custkey = o_custkey AND o_comment NOT LIKE '%special%requests%'
+--       GROUP BY c_custkey) AS c_orders
+-- GROUP BY c_count
+-- ORDER BY custdist DESC, c_count DESC
+== Optimized Logical Plan ==
+Sort: custdist DESC, c_count DESC  [est_rows=1500]
+  Projection: c_count, count(*) AS custdist  [est_rows=1500]
+    Aggregate: group=[c_count] aggs=[count(*) AS count(*)]  [est_rows=1500]
+      Projection: count(o_orderkey) AS c_count  [est_rows=1500]
+        Aggregate: group=[c_custkey] aggs=[count(o_orderkey) AS count(o_orderkey)]  [est_rows=1500]
+          Projection: c_custkey, o_orderkey  [est_rows=14000]
+            LeftJoin: on=[c_custkey = o_custkey]  [est_rows=14000]
+              Scan: customer [c_custkey]  [est_rows=1500]
+              Scan: orders [o_orderkey, o_custkey, o_comment] filters=[o_comment NOT LIKE '%special%requests%']  [est_rows=13500]
+== Physical Plan ==
+SortExec: [custdist DESC, c_count DESC]
+  ProjectExec: c_count, count(*) AS custdist
+    HashAggregateExec: group=[c_count] aggs=[count(*)]
+      ProjectExec: count(o_orderkey) AS c_count
+        HashAggregateExec: group=[c_custkey] aggs=[count(o_orderkey)]
+          ProjectExec: c_custkey, o_orderkey
+            HashJoinExec: left on=[c_custkey = o_custkey]
+              ScanExec: customer (memory) columns=[c_custkey]
+              ScanExec: orders (memory) columns=[o_orderkey, o_custkey, o_comment] filter=[o_comment NOT LIKE '%special%requests%']

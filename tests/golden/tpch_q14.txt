@@ -1,0 +1,20 @@
+-- SELECT 100.00 * sum(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1 - l_discount) ELSE 0 END)
+--        / sum(l_extendedprice * (1 - l_discount)) AS promo_revenue
+-- FROM lineitem, part
+-- WHERE l_partkey = p_partkey
+--   AND l_shipdate >= DATE '1995-09-01'
+--   AND l_shipdate < DATE '1995-09-01' + INTERVAL '1' MONTH
+== Optimized Logical Plan ==
+Projection: 100.0 * sum(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / sum(l_extendedprice * (1 - l_discount)) AS promo_revenue  [est_rows=1]
+  Aggregate: group=[] aggs=[sum(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1.0 - l_discount) ELSE 0.0 END) AS sum(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1 - l_discount) ELSE 0 END), sum(l_extendedprice * (1.0 - l_discount)) AS sum(l_extendedprice * (1 - l_discount))]  [est_rows=1]
+    Projection: l_extendedprice, l_discount, p_type  [est_rows=15057]
+      InnerJoin: on=[l_partkey = p_partkey]  [est_rows=15057]
+        Scan: lineitem [l_partkey, l_extendedprice, l_discount, l_shipdate] filters=[l_shipdate >= DATE '1995-09-01', l_shipdate < DATE '1995-10-01']  [est_rows=15057]
+        Scan: part [p_partkey, p_type]  [est_rows=2000]
+== Physical Plan ==
+ProjectExec: 100.0 * sum(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1 - l_discount) ELSE 0 END) / sum(l_extendedprice * (1 - l_discount)) AS promo_revenue
+  HashAggregateExec: group=[] aggs=[sum(CASE WHEN p_type LIKE 'PROMO%' THEN l_extendedprice * (1.0 - l_discount) ELSE 0.0 END), sum(l_extendedprice * (1.0 - l_discount))]
+    ProjectExec: l_extendedprice, l_discount, p_type
+      HashJoinExec: inner on=[l_partkey = p_partkey]
+        ScanExec: lineitem (memory) columns=[l_partkey, l_extendedprice, l_discount, l_shipdate] filter=[l_shipdate >= DATE '1995-09-01' AND l_shipdate < DATE '1995-10-01'] pruning_predicates=2
+        ScanExec: part (memory) columns=[p_partkey, p_type]
